@@ -4,8 +4,10 @@
 	"title": "Control Board",
 	"description": "A 3d printer control board",
 	"type": "object",
+	"additionalProperties": false,
 	"properties": {
-		"serialPath": {
+		"$schema": { "type": "string" },
+		"id": {
 			"description": "The path for serial communication with this MCU",
 			"type": "string"
 		},
@@ -37,6 +39,18 @@
 			"description": "Link to the RatOS configuration for this board",
 			"type": "string"
 		},
+		"manualFileName": {
+			"description": "The filename of the manual for this board, should be placed in the board directory.",
+			"type": "string"
+		},
+		"wireDiagramFileName": {
+			"description": "The filename of the wire diagram for this board, should be placed in the board directory.",
+			"type": "string"
+		},
+		"boardImageFileName": {
+			"description": "The filename of the image of this board, should be placed in the board directory.",
+			"type": "string"
+		},
 		"isToolboard": {
 			"description": "Whether this controlboard is a toolboard",
 			"type": "boolean"
@@ -45,13 +59,287 @@
 			"description": "Whether this is the host computer RatOS is running on (used for Pi)",
 			"type": "boolean"
 		},
+		"serialPath": {
+			"description": "This property is only required for host boards. It is the path to the serial port to use for communication with the host mcu",
+			"type": "string"
+		},
 		"disableAutoFlash": {
 			"description": "Whether to disable automatic flashing of this board",
 			"type": "boolean"
 		},
+		"hasQuirksFiles": {
+			"description": "Whether this board has a quirks file that needs to be loaded (must be called quirks.cfg and quirks-toolboard.cfg)",
+			"type": "boolean"
+		},
+		"alternativePT1000Resistor": {
+			"description": "The value of an optional resistor used for PT1000 sensors, if different from the default 4700",
+			"type": "number"
+		},
+		"thermistorPullup": {
+			"description": "The value of the pullup resistor used for thermistors, if different from the default 4700",
+			"type": "number"
+		},
+		"driverCount": {
+			"description": "How many drivers this board has",
+			"type": "number"
+		},
+		"hasMcuTempSensor": {
+			"description": "Whether this board has an MCU temperature sensor, default is true",
+			"type": "boolean"
+		},
+		"outputPins": {
+			"description": "Output pin definitions. Some boards have safety features that require a pin to be pulled high to enable power, such as the SKR2.",
+			"type": "array",
+			"items": {
+				"type": "object",
+				"properties": {
+					"name": {
+						"description": "The name of the feature",
+						"type": "string"
+					},
+					"pin": {
+						"type": "string"
+					},
+					"value": {
+						"type": "number",
+						"maximum": 1,
+						"minimum": 0
+					}
+				}
+			}
+		},
+		"motorSlots": {
+			"description": "A specification of the motor slots available on this board",
+			"type": "object",
+			"patternProperties": {
+				"^\\S+$": {
+					"type": "object",
+					"description": "The settings for a motor slot",
+					"properties": {
+						"title": {
+							"type": "string"
+						},
+						"step_pin": {
+							"type": "string"
+						},
+						"dir_pin": {
+							"type": "string"
+						},
+						"enable_pin": {
+							"type": "string"
+						},
+						"diag_pin": {
+							"type": "string"
+						},
+						"endstop_pin": {
+							"type": "string"
+						},
+						"uart_pin": {
+							"type": "string"
+						},
+						"uart_address": {
+							"type": "string"
+						},
+						"rx_pin": {
+							"type": "string"
+						},
+						"tx_pin": {
+							"type": "string"
+						},
+						"cs_pin": {
+							"type": "string"
+						},
+						"spi_bus": {
+							"type": "string"
+						},
+						"spi_software_mosi_pin": {
+							"type": "string"
+						},
+						"spi_software_miso_pin": {
+							"type": "string"
+						},
+						"spi_software_sclk_pin": {
+							"type": "string"
+						}
+					},
+					"additionalProperties": false,
+					"required": ["step_pin", "dir_pin", "enable_pin", "title", "uart_pin", "cs_pin"]
+				}
+			}
+		},
+		"stepperSPI": {
+			"description": "Which settings to use for SPI stepper drivers",
+			"type": "object",
+			"additionalProperties": false,
+			"properties": {
+				"software": {
+					"description": "Whether to use software SPI",
+					"type": "object",
+					"additionalProperties": false,
+					"required": ["sclk", "mosi", "miso"],
+					"properties": {
+						"sclk": {
+							"description": "The clock pin",
+							"type": "string"
+						},
+						"mosi": {
+							"description": "The mosi pin",
+							"type": "string"
+						},
+						"miso": {
+							"description": "The miso pin",
+							"type": "string"
+						}
+					}
+				},
+				"hardware": {
+					"description": "Which SPI bus to use if using hardware spi",
+					"type": "object",
+					"required": ["bus"],
+					"additionalProperties": false,
+					"properties": {
+						"bus": {
+							"description": "The SPI bus to use",
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"ADXL345SPI": {
+			"description": "Which settings to use for the ADXL345 accelerometer",
+			"type": "object",
+			"additionalProperties": false,
+			"properties": {
+				"software": {
+					"description": "Whether to use software SPI",
+					"type": "object",
+
+					"additionalProperties": false,
+					"properties": {
+						"sclk": {
+							"description": "The clock pin",
+							"type": "string"
+						},
+						"mosi": {
+							"description": "The mosi pin",
+							"type": "string"
+						},
+						"miso": {
+							"description": "The miso pin",
+							"type": "string"
+						}
+					}
+				},
+				"hardware": {
+					"description": "Which SPI bus to use if using hardware spi",
+					"type": "object",
+					"additionalProperties": false,
+					"properties": {
+						"bus": {
+							"description": "The SPI bus to use",
+							"type": "string"
+						}
+					}
+				},
+				"cs_pin": {
+					"description": "The chip select pin",
+					"type": "string"
+				}
+			}
+		},
+		"LIS2DW": {
+			"description": "Which settings to use for the ADXL345 accelerometer",
+			"type": "object",
+			"additionalProperties": false,
+			"properties": {
+				"software": {
+					"description": "Whether to use software SPI",
+					"type": "object",
+
+					"additionalProperties": false,
+					"properties": {
+						"sclk": {
+							"description": "The clock pin",
+							"type": "string"
+						},
+						"mosi": {
+							"description": "The mosi pin",
+							"type": "string"
+						},
+						"miso": {
+							"description": "The miso pin",
+							"type": "string"
+						}
+					}
+				},
+				"hardware": {
+					"description": "Which SPI bus to use if using hardware spi",
+					"type": "object",
+					"additionalProperties": false,
+					"properties": {
+						"bus": {
+							"description": "The SPI bus to use",
+							"type": "string"
+						}
+					}
+				},
+				"cs_pin": {
+					"description": "The chip select pin",
+					"type": "string"
+				}
+			}
+		},
+		"integratedDrivers": {
+			"description": "Describes the drivers integrated on this board, if any",
+			"type": "object",
+			"additionalProperties": true,
+			"properties": {
+				"x": {
+					"description": "The driver for the X axis",
+					"type": "string"
+				},
+				"y": {
+					"description": "The driver for the Y axis",
+					"type": "string"
+				},
+				"z": {
+					"description": "The driver for the Z axis",
+					"type": "string"
+				},
+				"z1": {
+					"description": "The driver for the Z axis",
+					"type": "string"
+				},
+				"z2": {
+					"description": "The driver for the Z axis",
+					"type": "string"
+				},
+				"extruder": {
+					"description": "The driver for the E axis",
+					"type": "string"
+				}
+			}
+		},
+		"driverVoltages": {
+			"description": "The supported stepper voltages. 24, 36, 48, 56 and 60 is supported. Default is 24 only.",
+			"type": "array",
+			"items": {
+				"type": "number"
+			}
+		},
+		"extruderlessConfig": {
+			"description": "The name of an extruderless config (used for 5 driver boards to support 6 driver printers)",
+			"type": "string"
+		},
+		"fourPinFanConnectorCount": {
+			"description": "How many 4 pin fan connectors this board has",
+			"type": "number"
+		},
 		"dfu": {
 			"description": "DFU Flashing details",
 			"type": "object",
+			"additionalProperties": false,
 			"properties": {
 				"dfuBootImage": {
 					"description": "Path to a picture for locating the buttons and/or jumpers required to boot into DFU mode",
@@ -63,19 +351,26 @@
 				},
 				"instructions": {
 					"description": "Instruction steps for how to boot into DFU mode",
-					"type": "array"
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
 				},
 				"reminder": {
 					"description": "Post-flashing reminders, if any.",
 					"type": "string"
+				},
+				"hasBoot0Jumper": {
+					"description": "Whether this board has a boot0 jumper",
+					"type": "boolean"
 				}
 			},
-			"required": ["dfuBootImage", "flashDevice", "instructions"]
+			"required": ["dfuBootImage", "flashDevice", "instructions", "hasBoot0Jumper"]
 		},
 		"sdFileName": {
 			"description": "The filename for the firmware binary when flashing via SD card",
 			"type": "string"
 		}
 	},
-	"required": ["serialPath", "name", "manufacturer", "firmwareBinaryName", "compileScript", "documentationLink"]
+	"required": ["id", "name", "manufacturer", "firmwareBinaryName", "compileScript", "documentationLink", "driverCount"]
 }

@@ -1,16 +1,17 @@
 #!/bin/bash
 # This script install additional dependencies
-# for the v-core 3 klipper setup.
+# for RatOS.
 
-SYSTEMDDIR="/etc/systemd/system"
-PKGLIST="python3-numpy python3-matplotlib jq curl"
+PKGLIST="python3-numpy python3-matplotlib curl"
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-source $SCRIPT_DIR/ratos-common.sh
+# shellcheck source=./scripts/ratos-common.sh
+source "$SCRIPT_DIR"/ratos-common.sh
 
 install_dependencies()
 {
     report_status "Installing RatOS dependencies"
+    # shellcheck disable=SC2086
     sudo apt-get update && sudo apt-get install -y $PKGLIST
 }
 
@@ -31,7 +32,7 @@ verify_ready()
 {
     if [ "$EUID" -eq 0 ]; then
         echo "This script must not run as root"
-        exit -1
+        exit 1
     fi
 }
 
@@ -44,6 +45,10 @@ install_udev_rules
 install_beacon
 install_hooks
 install_dependencies
-ensure_sudo_command_whitelisting
+ensure_sudo_command_whitelisting sudo
 register_gcode_shell_command
 register_ratos_homing
+register_z_offset_probe
+register_ratos
+register_resonance_generator
+register_ratos_kinematics

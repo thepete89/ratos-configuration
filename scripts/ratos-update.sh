@@ -5,9 +5,10 @@ if [ "$EUID" -ne 0 ]
 fi
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-
-source /home/pi/printer_data/config/RatOS/scripts/ratos-common.sh
-source /home/pi/printer_data/config/RatOS/scripts/moonraker-ensure-policykit-rules.sh
+# shellcheck source=./scripts/ratos-common.sh
+source "$SCRIPT_DIR"/ratos-common.sh
+# shellcheck source=./scripts/moonraker-ensure-policykit-rules.sh
+source "$SCRIPT_DIR"/moonraker-ensure-policykit-rules.sh
 
 update_symlinks()
 {
@@ -16,34 +17,18 @@ update_symlinks()
   ln -s /home/pi/printer_data/config/RatOS/boards/*/*.rules /etc/udev/rules.d/
 }
 
-restart_klipper()
+ensure_node_18()
 {
-  service klipper restart
-}
-
-symlink_klippy_extensions()
-{
-	report_status "Symlinking klippy extensions"
-	symlink_result=$(curl --fail --silent -X POST 'http://localhost:3000/configure/api/trpc/klippy-extensions.symlink' -H 'content-type: application/json')
-	configurator_success=$?
-	if [ $configurator_success -eq 0 ]
+	node -v | grep "^v18" > /dev/null
+	isinstalled=$?
+	if [ $isinstalled -eq 0 ]
 	then
-		echo $symlink_result | jq -r '.result.data.json'
+		echo "Node 18 already installed"
 	else
-		echo "Failed to symlink klippy extensions. Is the RatOS configurator running? Ignore this if not on RatOS 2.0 yet"
-	fi
-}
-
-symlink_moonraker_extensions()
-{
-	report_status "Symlinking moonraker extensions"
-	symlink_result=$(curl --fail --silent -X POST 'http://localhost:3000/configure/api/trpc/moonraker-extensions.symlink' -H 'content-type: application/json')
-	configurator_success=$?
-	if [ $configurator_success -eq 0 ]
-	then
-		echo $symlink_result | jq -r '.result.data.json'
-	else
-		echo "Failed to symlink moonraker extensions. Is the RatOS configurator running? Ignore this if not on RatOS 2.0 yet"
+		echo "Installing Node 18"
+		sed -i 's/node_16\.x/node_18\.x/g' /etc/apt/sources.list.d/nodesource.list
+		apt-get update
+		apt-get install -y nodejs
 	fi
 }
 
@@ -54,14 +39,38 @@ fix_klippy_env_ownership()
 	fi
 }
 
+restart_configurator()
+{
+	report_status "Restarting configurator..."
+	systemctl restart ratos-configurator
+}
+
+symlink_extensions()
+{
+	report_status "Symlinking klippy extensions"
+	ratos extensions symlink
+	configurator_success=$?
+	if [ ! $configurator_success -eq 0 ]
+	then
+		echo "Failed to symlink klippy extensions. Is the RatOS configurator running?"
+		exit 1
+	fi
+}
+
 # Run update symlinks
 update_symlinks
-ensure_sudo_command_whitelisting
+ensure_sudo_command_whitelisting root
 ensure_service_permission
 fix_klippy_env_ownership
 install_beacon
 install_hooks
-register_ratos_homing
-symlink_klippy_extensions
-symlink_moonraker_extensions
+ensure_node_18
+patch_klipperscreen_service_restarts
+register_z_offset_probe
+remove_old_postprocessor
+register_ratos
+register_resonance_generator
+register_ratos_kinematics
+symlink_extensions
 update_beacon_fw
+restart_configurator

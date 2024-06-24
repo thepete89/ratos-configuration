@@ -1,4 +1,5 @@
 #!/bin/bash
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 report_status()
 {
     echo -e "\n\n###### $1"
@@ -15,7 +16,6 @@ disable_modem_manager()
 		report_status "Modem manager is already disabled, continuing..."
 	fi
 }
-
 
 update_beacon_fw()
 {
@@ -68,16 +68,16 @@ install_beacon()
 
 	# update link to beacon.py
 	echo "beacon: registering beacon with the configurator."
-	register_klippy_extension "beacon" "$BEACON_DIR" "beacon.py"
+	_register_klippy_extension "beacon" "$BEACON_DIR" "beacon.py"
 
 }
 
-register_klippy_extension() {
+_register_klippy_extension() {
 	EXT_NAME=$1
     EXT_PATH=$2
     EXT_FILE=$3
 	ERROR_IF_EXISTS=$4
-	[[ "$ERROR_IF_EXISTS" == "false" ]] && ERROR_IF_EXISTS="false" || ERROR_IF_EXISTS="true"
+	[[ "$ERROR_IF_EXISTS" == "false" ]] && ERROR_IF_EXISTS="" || ERROR_IF_EXISTS="-e "
 
     report_status "Registering klippy extension '$EXT_NAME' with the RatOS Configurator..."
     if [ ! -e "$EXT_PATH/$EXT_FILE" ]
@@ -86,49 +86,99 @@ register_klippy_extension() {
         exit 1
     fi
 
-    
-    if curl --fail -X POST 'http://localhost:3000/configure/api/trpc/klippy-extensions.register' \
-		-H 'content-type: application/json' \
-		--data-raw "{\"json\":{\"extensionName\":\"$EXT_NAME\",\"path\":\"$EXT_PATH\",\"fileName\":\"$EXT_FILE\",\"errorIfExists\":$ERROR_IF_EXISTS}}"
+    # shellcheck disable=SC2086
+    if ! ratos extensions register klipper $ERROR_IF_EXISTS"$EXT_NAME" "$EXT_PATH"/"$EXT_FILE"
     then
-        echo "Registered $EXT_NAME successfully."
-    else
         echo "ERROR: Failed to register $EXT_NAME. Is the RatOS configurator running?"
         exit 1
     fi
 }
 
+regenerate_config() {
+    report_status "Regenerating RatOS configuration via RatOS Configurator..."
+
+    ratos config regenerate
+}
+
 register_gcode_shell_command()
 {
     EXT_NAME="gcode_shell_extension"
-    EXT_PATH=$(realpath $SCRIPT_DIR/../klippy)
+    EXT_PATH=$(realpath "$SCRIPT_DIR"/../klippy)
     EXT_FILE="gcode_shell_command.py"
-    register_klippy_extension $EXT_NAME $EXT_PATH $EXT_FILE
+    _register_klippy_extension $EXT_NAME "$EXT_PATH" $EXT_FILE
 }
 
 register_ratos_homing()
 {
     EXT_NAME="ratos_homing_extension"
-    EXT_PATH=$(realpath $SCRIPT_DIR/../klippy)
+    EXT_PATH=$(realpath "$SCRIPT_DIR"/../klippy)
     EXT_FILE="ratos_homing.py"
 	# Don't error if extension is already registered
-    register_klippy_extension $EXT_NAME $EXT_PATH $EXT_FILE "false"
+    _register_klippy_extension $EXT_NAME "$EXT_PATH" $EXT_FILE "false"
+}
+
+register_resonance_generator()
+{
+    EXT_NAME="resonance_generator_extension"
+    EXT_PATH=$(realpath "$SCRIPT_DIR"/../klippy)
+    EXT_FILE="resonance_generator.py"
+	# Don't error if extension is already registered
+    _register_klippy_extension $EXT_NAME "$EXT_PATH" $EXT_FILE "false"
+}
+
+register_z_offset_probe()
+{
+    EXT_NAME="z_offset_probe_extension"
+    EXT_PATH=$(realpath "$SCRIPT_DIR"/../klippy)
+    EXT_FILE="z_offset_probe.py"
+	# Don't error if extension is already registered
+    _register_klippy_extension $EXT_NAME "$EXT_PATH" $EXT_FILE "false"
+}
+
+register_ratos_kinematics() {
+	if ratos extensions list | grep "ratos-kinematics" &>/dev/null; then
+		ratos extensions unregister klipper -k ratos_hybrid_corexy
+	fi
+	if [ -e /home/pi/ratos-kinematics ]; then
+		report_status "Removing old ratos-kinematics directory..."
+		rm -rf /home/pi/ratos-kinematics
+	fi
+    EXT_NAME="ratos_hybrid_corexy"
+    EXT_PATH=$(realpath "${SCRIPT_DIR}/../klippy/kinematics/ratos_hybrid_corexy.py")
+    ratos extensions register klipper -k $EXT_NAME "$EXT_PATH"
+}
+
+register_ratos()
+{
+    EXT_NAME="ratos_extension"
+    EXT_PATH=$(realpath "$SCRIPT_DIR"/../klippy)
+    EXT_FILE="ratos.py"
+	# Don't error if extension is already registered
+    _register_klippy_extension $EXT_NAME "$EXT_PATH" $EXT_FILE "false"
+}
+
+remove_old_postprocessor()
+{
+	if [ -L /home/pi/klipper/klippy/extras/ratos_post_processor.py ]; then
+		report_status "Removing old postprocessor.py..."
+		rm /home/pi/klipper/klippy/extras/ratos_post_processor.py
+	fi
 }
 
 install_hooks()
 {
     report_status "Installing git hooks"
-	if [[ ! -e /home/pi/printer_data/config/RatOS/.git/hooks/post-merge ]]
+	if [[ ! -L /home/pi/printer_data/config/RatOS/.git/hooks/post-merge ]]
 	then
- 	   ln -s /home/pi/printer_data/config/RatOS/scripts/ratos-post-merge.sh /home/pi/printer_data/config/RatOS/.git/hooks/post-merge
+ 	   ln -s "$SCRIPT_DIR"/ratos-post-merge.sh "$SCRIPT_DIR"/../.git/hooks/post-merge
 	fi
-	if [[ ! -e /home/pi/klipper/.git/hooks/post-merge ]]
+	if [[ ! -L /home/pi/klipper/.git/hooks/post-merge ]]
 	then
- 	   ln -s /home/pi/printer_data/config/RatOS/scripts/klipper-post-merge.sh /home/pi/klipper/.git/hooks/post-merge
+ 	   ln -s "$SCRIPT_DIR"/klipper-post-merge.sh /home/pi/klipper/.git/hooks/post-merge
 	fi
-	if [[ ! -e /home/pi/moonraker/.git/hooks/post-merge ]]
+	if [[ ! -L /home/pi/moonraker/.git/hooks/post-merge ]]
 	then
- 	   ln -s /home/pi/printer_data/config/RatOS/scripts/moonraker-post-merge.sh /home/pi/moonraker/.git/hooks/post-merge
+ 	   ln -s "$SCRIPT_DIR"/moonraker-post-merge.sh /home/pi/moonraker/.git/hooks/post-merge
 	fi
 	if [[ ! -L /home/pi/beacon/.git/hooks/post-merge ]]
 	then
@@ -139,7 +189,7 @@ install_hooks()
 ensure_service_permission()
 {
 	report_status "Updating service permissions"
-	if ! cat /home/pi/printer_data/moonraker.asvc | grep "klipper_mcu" &>/dev/null; then
+	if ! grep "klipper_mcu" /home/pi/printer_data/moonraker.asvc &>/dev/null || ! grep "ratos-configurator" /home/pi/printer_data/moonraker.asvc &>/dev/null; then
 		cat << '#EOF' > /home/pi/printer_data/moonraker.asvc
 klipper_mcu
 webcamd
@@ -154,6 +204,18 @@ ratos-configurator
 #EOF
 
 		report_status "Configurator added to moonraker service permissions"
+	fi
+}
+
+patch_klipperscreen_service_restarts()
+{
+	if grep "StartLimitIntervalSec=0" /etc/systemd/system/klipperscreen.service &>/dev/null; then
+		report_status "Patching KlipperScreen service restarts..."
+		# Fix restarts
+		sudo sed -i 's/\RestartSec=1/\RestartSec=5/g' /etc/systemd/system/KlipperScreen.service
+		sudo sed -i 's/\StartLimitIntervalSec=0/\StartLimitIntervalSec=100\nStartLimitBurst=4/g' /etc/systemd/system/KlipperScreen.service
+		sudo systemctl daemon-reload
+		report_status "KlipperScreen service patched"
 	fi
 }
 
@@ -195,3 +257,4 @@ pi  ALL=(ALL) NOPASSWD: /home/pi/printer_data/config/RatOS/scripts/change-hostna
 		$sudo cp --preserve=mode /tmp/031-ratos-change-hostname /etc/sudoers.d/031-ratos-change-hostname
 	fi
 }
+
